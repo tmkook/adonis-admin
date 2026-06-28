@@ -27,7 +27,7 @@ export class {{className}}Controller {
    * Show individual record
    */
   async show({ request }: HttpContext) {
-    const result = await resource.detail(this.model, request.param('id'))
+    const result = await resource.detail(this.model.query(), request.param('id'))
     return resource.success(result)
   }
 

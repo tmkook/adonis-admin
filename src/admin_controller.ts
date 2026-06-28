@@ -288,7 +288,7 @@ export abstract class UserController {
       status: resource.symbols.eq,
     }
     const query = resource.query(this.model.query(), ctx.request.qs(), filters)
-    const result = await resource.paginate(query, ctx.request.qs())
+    const result = await resource.paginate(query, ctx.request.qs(), true)
     return resource.success(result)
   }
 
@@ -374,7 +374,7 @@ export abstract class RoleController {
       status: resource.symbols.eq,
     }
     const query = resource.query(this.model.query(), ctx.request.qs(), filters)
-    const result = await resource.paginate(query, ctx.request.qs())
+    const result = await resource.paginate(query, ctx.request.qs(), true)
     return resource.success(result)
   }
 
@@ -446,7 +446,7 @@ export abstract class MenuController {
       status: resource.symbols.eq,
     }
     const query = resource.query(this.model.query(), ctx.request.qs(), filters)
-    const result = await resource.paginate(query, ctx.request.qs())
+    const result = await resource.paginate(query, ctx.request.qs(), true)
     return resource.success(result)
   }
 
@@ -454,7 +454,10 @@ export abstract class MenuController {
    * Show individual record
    */
   async show(ctx: any) {
-    const result = await resource.detail(this.model, ctx.request.param('id'))
+    const result = await resource.detail(
+      this.model.query().preload('roles'),
+      ctx.request.param('id')
+    )
     return resource.success(result)
   }
 
@@ -534,7 +537,7 @@ export abstract class DeptController {
       status: resource.symbols.eq,
     }
     const query = resource.query(this.model.query(), ctx.request.qs(), filters)
-    const result = await resource.paginate(query, ctx.request.qs())
+    const result = await resource.paginate(query, ctx.request.qs(), true)
     return resource.success(result)
   }
 
@@ -614,7 +617,7 @@ export abstract class LogController {
       status: resource.symbols.eq,
     }
     const query = resource.query(this.model.query(), ctx.request.qs(), filters)
-    const result = await resource.paginate(query, ctx.request.qs())
+    const result = await resource.paginate(query, ctx.request.qs(), true)
     return resource.success(result)
   }
 

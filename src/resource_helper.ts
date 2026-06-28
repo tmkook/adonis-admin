@@ -151,8 +151,8 @@ export class ResourceHelper {
    * @example
    * return this.detail(AdminUser, 1)
    */
-  async detail(model: LucidModel, id: number | string) {
-    return await model.findByOrFail(this.pk, id)
+  async detail(model: ModelQueryBuilderContract<LucidModel, LucidRow>, id: number | string) {
+    return await model.where(this.pk, id).firstOrFail()
   }
 
   /**
