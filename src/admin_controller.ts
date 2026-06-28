@@ -54,7 +54,14 @@ export abstract class SystemController {
     // 2fa enabled
     if (user.secret && this.totpEnabled) {
       if (params.authCode && params.authToken) {
-        const isPassCode = await utils.totp.verify(params.authCode, { secret: user.secret, digits: 6 })
+        const tokens = utils.verifyAuthToken(params.authToken)
+        if (tokens.userId !== String(user.id)) {
+          return resource.error('authToken invalid', 'E_TOTP_ERROR')
+        }
+        const isPassCode = await utils.totp.verify(params.authCode, {
+          secret: user.secret,
+          digits: 6,
+        })
         if (!isPassCode) {
           return resource.error('authCode invalid', 'E_TOTP_ERROR')
         }

@@ -37,7 +37,6 @@ export default function registerSystemControllers(router: Router) {
   router.post('auth/passwords/reset', [SystemController, 'forgotPassword']).as('guest_reset')
 
   // Auth routes (require authentication)
-  router.get('auth/routes', () => {code: 0, data: router.toJSON()}).as('admin_routes')
   router.get('auth/totp', [SystemController, 'showTotpSecret']).as('admin_totp')
   router.get('auth/mine', [SystemController, 'mine']).as('admin_mine')
   router.patch('auth/mine', [SystemController, 'updateMine']).as('admin_update_mine')

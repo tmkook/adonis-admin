@@ -77,12 +77,12 @@ export function makeTokenName(request: any): string {
   return `${device}(${ip})`
 }
 
-export function makeRefreshToken(data: { accessTokenId: string, userId: string }): string {
+export function makeRefreshToken(data: { accessTokenId: string; userId: string }): string {
   return encryption.encrypt(data, { expiresIn: '30d' })
 }
 
-export function verifyRefreshToken(token: string): { accessTokenId: string, userId: string } {
-  return encryption.decrypt(token) as { accessTokenId: string, userId: string }
+export function verifyRefreshToken(token: string): { accessTokenId: string; userId: string } {
+  return encryption.decrypt(token) as { accessTokenId: string; userId: string }
 }
 
 export function makeAuthToken(data: { userId: string }): string {
