@@ -636,7 +636,7 @@ test.group('Admin API', (group) => {
       .json({ username: 'admin', password: 'resetpass123' })
       .send()
     loginRes.assertStatus(200)
-    const loginBody = loginRes.body() as { code: number; data: { refreshToken: string } }
+    const loginBody = loginRes.body() as { code: number; data: { authToken: string } }
     assert.equal(loginBody.code, 2)
 
     const twoFactorCode = await totp.generate({ secret, digits: 6 })
@@ -645,8 +645,8 @@ test.group('Admin API', (group) => {
       .json({
         username: 'admin',
         password: 'resetpass123',
-        code: twoFactorCode,
-        token: loginBody.data.refreshToken,
+        authCode: twoFactorCode,
+        authToken: loginBody.data.authToken,
       })
       .send()
     finalLoginRes.assertStatus(200)
