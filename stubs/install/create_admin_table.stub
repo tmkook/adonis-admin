@@ -1,0 +1,157 @@
+{{{
+    exports({ to: app.migrationsPath('1744446870487_create_admin_table.ts') })
+}}}
+import { BaseSchema } from '@adonisjs/lucid/schema'
+
+export default class extends BaseSchema {
+  async up() {
+    this.schema.createTable('admin_depts', (table) => {
+      table.increments('id')
+      table.integer('parent_id').notNullable().unsigned().defaultTo(0)
+      table.string('name').notNullable()
+      table.string('leader').notNullable().defaultTo('')
+      table.string('phone').notNullable().defaultTo('')
+      table.string('email').notNullable().defaultTo('')
+      table.string('remark').defaultTo('')
+      table.integer('sort').notNullable().unsigned().defaultTo(1)
+      table.integer('status').notNullable().defaultTo(1)
+      table.timestamp('created_at')
+      table.timestamp('updated_at')
+    })
+
+    this.schema.createTable('admin_users', (table) => {
+      table.increments('id')
+      table
+        .integer('dept_id')
+        .unsigned()
+        .nullable()
+        .references('id')
+        .inTable('admin_depts')
+        .onDelete('SET NULL')
+      table.string('username').notNullable().unique()
+      table.string('nickname').notNullable()
+      table.string('password').notNullable()
+      table.string('avatar').notNullable().defaultTo('')
+      table.string('email').notNullable().defaultTo('')
+      table.string('phone').notNullable().defaultTo('')
+      table.string('secret').notNullable().defaultTo('')
+      table.text('permissions').notNullable().defaultTo('')
+      table.integer('sex').notNullable().defaultTo(0)
+      table.integer('status').notNullable().defaultTo(1)
+      table.string('remark').notNullable().defaultTo('')
+      table.timestamp('created_at')
+      table.timestamp('updated_at')
+    })
+
+    this.schema.createTable('admin_auth_access_tokens', (table) => {
+      table.increments('id')
+      table
+        .integer('tokenable_id')
+        .notNullable()
+        .unsigned()
+        .references('id')
+        .inTable('admin_users')
+        .onDelete('CASCADE')
+
+      table.string('type').notNullable()
+      table.string('name').nullable()
+      table.string('hash').notNullable()
+      table.text('abilities').notNullable()
+      table.timestamp('created_at')
+      table.timestamp('updated_at')
+      table.timestamp('last_used_at').nullable()
+      table.timestamp('expires_at').nullable()
+    })
+
+    this.schema.createTable('admin_roles', (table) => {
+      table.increments('id')
+      table.string('name').notNullable()
+      table.string('code', 64).notNullable().unique()
+      table.string('remark').notNullable().defaultTo('')
+      table.integer('status').notNullable().defaultTo(1)
+      table.timestamp('created_at')
+      table.timestamp('updated_at')
+    })
+
+    this.schema.createTable('admin_menus', (table) => {
+      table.increments('id')
+      table.integer('parent_id').notNullable().unsigned().defaultTo(0)
+      table.string('title').notNullable().defaultTo('')
+      table.string('name').notNullable().defaultTo('')
+      table.string('path').notNullable().defaultTo('')
+      table.string('icon').notNullable().defaultTo('')
+      table.string('badge').notNullable().defaultTo('')
+      table.string('component').notNullable().defaultTo('')
+      table.string('redirect').notNullable().defaultTo('')
+      table.string('permissions').notNullable().defaultTo('')
+      table.boolean('show').notNullable().defaultTo(true)
+      table.integer('sort').notNullable().defaultTo(1)
+      table.integer('status').notNullable().defaultTo(1)
+      table.timestamp('created_at')
+      table.timestamp('updated_at')
+    })
+
+    this.schema.createTable('admin_user_roles', (table) => {
+      table.increments('id')
+      table
+        .integer('role_id')
+        .unsigned()
+        .references('id')
+        .inTable('admin_roles')
+        .onDelete('CASCADE')
+      table
+        .integer('user_id')
+        .unsigned()
+        .references('id')
+        .inTable('admin_users')
+        .onDelete('CASCADE')
+      table.unique(['role_id', 'user_id'])
+      table.timestamp('created_at')
+      table.timestamp('updated_at')
+    })
+
+    this.schema.createTable('admin_role_menus', (table) => {
+      table.increments('id')
+      table
+        .integer('role_id')
+        .unsigned()
+        .references('id')
+        .inTable('admin_roles')
+        .onDelete('CASCADE')
+      table
+        .integer('menu_id')
+        .unsigned()
+        .references('id')
+        .inTable('admin_menus')
+        .onDelete('CASCADE')
+      table.unique(['role_id', 'menu_id'])
+      table.timestamp('created_at')
+      table.timestamp('updated_at')
+    })
+
+    this.schema.createTable('admin_logs', (table) => {
+      table.increments('id')
+      table.string('ip').notNullable().defaultTo('')
+      table.string('path').notNullable().defaultTo('')
+      table.string('method').notNullable().defaultTo('')
+      table.string('username').notNullable().defaultTo('')
+      table.string('address').notNullable().defaultTo('')
+      table.text('params').notNullable().defaultTo('')
+      table.text('headers').notNullable().defaultTo('')
+      table.integer('status').notNullable().defaultTo(200)
+      table.timestamp('created_at')
+      table.timestamp('updated_at')
+    })
+  }
+
+  async down() {
+    this.schema.dropTable('admin_auth_access_tokens')
+    this.schema.dropTable('admin_user_roles')
+    this.schema.dropTable('admin_role_menus')
+    this.schema.dropTable('admin_users')
+    this.schema.dropTable('admin_roles')
+    this.schema.dropTable('admin_menus')
+    this.schema.dropTable('admin_depts')
+    this.schema.dropTable('admin_logs')
+  }
+}

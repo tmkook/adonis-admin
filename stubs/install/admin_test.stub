@@ -1,0 +1,665 @@
+{{{
+    exports({ to: app.makePath('tests/functional/admin_api.spec.ts') })
+}}}
+import { test } from '@japa/runner'
+import { ApiClient } from '@japa/api-client'
+import db from '@adonisjs/lucid/services/db'
+import { totp } from 'adonis-admin/src/utils'
+import * as models from '#models/admin'
+
+async function createAccessToken() {
+  const user = await models.default.findByOrFail('username', 'admin')
+  const token = await models.default.accessTokens.create(user, ['*'], {
+    expiresIn: '1d',
+    name: 'test',
+  })
+  return token.value!.release()
+}
+
+test.group('Admin API', (group) => {
+  group.setup(async () => {
+    await db.beginGlobalTransaction()
+    const accessToken = await createAccessToken()
+    ApiClient.onRequest((request) => {
+      request.header('Authorization', 'Bearer ' + accessToken)
+    })
+  })
+
+  group.teardown(async () => {
+    ApiClient.clearRequestHandlers()
+    await db.rollbackGlobalTransaction()
+  })
+
+  // ============ Auth: Login ============
+
+  test('login should return user, roles and tokens', async ({ client, assert }) => {
+    const response = await client
+      .visit('guest_login')
+      .json({ username: 'admin', password: 'admin123' })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as any
+    const loginData = body.data
+    assert.properties(loginData, ['user', 'roles', 'tokens'])
+    assert.equal(loginData.user.username, 'admin')
+    assert.notProperty(loginData.user, 'password')
+    assert.notProperty(loginData.user, 'secret')
+    assert.include(loginData.roles, 'admin')
+    assert.properties(loginData.tokens, ['accessToken', 'refreshToken', 'expires'])
+  })
+
+  // ============ Auth: Profile ============
+
+  test('mine should return current user info', async ({ client, assert }) => {
+    const response = await client.visit('admin_mine').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.username, 'admin')
+    assert.notProperty(body.data, 'password')
+    assert.notProperty(body.data, 'secret')
+  })
+
+  test('access-token should list tokens', async ({ client, assert }) => {
+    const response = await client.visit('admin_sessions').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: { list: any[]; current: number } }
+    assert.isArray(body.data.list)
+    assert.isNumber(body.data.current)
+    assert.isAtLeast(body.data.list.length, 1)
+  })
+
+  test('refresh-token should return new tokens', async ({ client, assert }) => {
+    const loginRes = await client
+      .visit('guest_login')
+      .json({ username: 'admin', password: 'admin123' })
+      .send()
+    const loginBody = loginRes.body() as any
+    const refreshToken = loginBody.data.tokens.refreshToken
+
+    // Use temporary token to avoid deleting global token
+    const tempToken = await createAccessToken()
+    const response = await client
+      .visit('guest_refresh')
+      .bearerToken(tempToken)
+      .json({ refreshToken })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as {
+      data: { accessToken: string; refreshToken: string; expires: number }
+    }
+    assert.isString(body.data.accessToken)
+    assert.isString(body.data.refreshToken)
+    assert.isNumber(body.data.expires)
+  })
+
+  test('profile should update basic info', async ({ client, assert }) => {
+    const response = await client
+      .visit('admin_update_mine')
+      .json({
+        phone: '13800138000',
+        nickname: 'AdminUpdated',
+        sex: 1,
+        remark: 'updated remark',
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.nickname, 'AdminUpdated')
+    assert.equal(body.data.sex, 1)
+    assert.equal(body.data.remark, 'updated remark')
+    assert.equal(body.data.phone, '13800138000')
+  })
+
+  test('totp-secret should return secret and uri', async ({ client, assert }) => {
+    const response = await client.visit('admin_totp').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: { secret: string; uri: string } }
+    assert.isString(body.data.secret)
+    assert.isString(body.data.uri)
+    assert.include(body.data.uri, 'otpauth://totp/')
+  })
+
+  test('profile should bind totp', async ({ client }) => {
+    const secretRes = await client.visit('admin_totp').send()
+    const secretBody = secretRes.body() as { data: { secret: string } }
+    const secret = secretBody.data.secret
+    const code = await totp.generate({ secret, digits: 6 })
+
+    const response = await client
+      .visit('admin_update_mine')
+      .json({ phone: '13800138000', secret, code })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+  })
+
+  test('upload should return file url', async ({ client, assert }) => {
+    const response = await client.visit('admin_upload').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: { url: string } }
+    assert.isString(body.data.url)
+  })
+
+  test('out-token should delete access token by id', async ({ client, assert }) => {
+    const user = await models.default.findByOrFail('username', 'admin')
+    const extraToken = await models.default.accessTokens.create(user, ['*'], {
+      expiresIn: '1d',
+      name: 'extra',
+    })
+
+    const listRes = await client.visit('admin_sessions').send()
+    const listBody = listRes.body() as { data: { list: any[]; current: number } }
+
+    const target = listBody.data.list.find(
+      (t) => t.id !== listBody.data.current && t.name === 'extra'
+    )
+    assert.isDefined(target)
+
+    const response = await client.visit('admin_session_delete', { id: target.id }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const mineRes = await client.visit('admin_mine').bearerToken(extraToken.value!.release()).send()
+    mineRes.assertStatus(401)
+  })
+
+  // ============ User Resource CRUD ============
+
+  test('user index should list users', async ({ client, assert }) => {
+    const response = await client.visit('admin_user.index').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: { data: any[]; meta: any } }
+    assert.isArray(body.data.data)
+    assert.isAtLeast(body.data.data.length, 1)
+    assert.properties(body.data.meta, ['currentPage', 'perPage', 'total'])
+  })
+
+  test('user store should create a new user', async ({ client, assert }) => {
+    const response = await client
+      .visit('admin_user.store')
+      .json({
+        username: 'testuser',
+        password: 'testpass123',
+        nickname: 'TestUser',
+        phone: '13900139000',
+        email: 'test@example.com',
+        sex: 1,
+        status: 1,
+        remark: 'test user',
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.username, 'testuser')
+    assert.equal(body.data.nickname, 'TestUser')
+    assert.notProperty(body.data, 'password')
+    assert.notProperty(body.data, 'secret')
+  })
+
+  test('user show should return user detail', async ({ client, assert }) => {
+    const user = await models.default.create({
+      username: 'showuser',
+      password: 'showpass123',
+      nickname: 'ShowUser',
+      status: 1,
+    })
+
+    const response = await client.visit('admin_user.show', { id: user.id }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.username, 'showuser')
+    assert.notProperty(body.data, 'password')
+  })
+
+  test('user update should modify user info', async ({ client, assert }) => {
+    const user = await models.default.create({
+      username: 'updateuser',
+      password: 'updatepass123',
+      nickname: 'UpdateUser',
+      status: 1,
+    })
+
+    const response = await client
+      .visit('admin_user.update', { id: user.id })
+      .json({
+        username: 'updateuser',
+        nickname: 'UpdatedNick',
+        status: 0,
+        remark: 'updated',
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    await user.refresh()
+    assert.equal(user.nickname, 'UpdatedNick')
+    assert.equal(user.status, 0)
+    assert.equal(user.remark, 'updated')
+  })
+
+  test('user destroy should delete user', async ({ client, assert }) => {
+    const user = await models.default.create({
+      username: 'deleteuser',
+      password: 'deletepass123',
+      nickname: 'DeleteUser',
+      status: 1,
+    })
+    const userId = user.id
+
+    const response = await client.visit('admin_user.destroy', { id: userId }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const deleted = await models.default.find(userId)
+    assert.isNull(deleted)
+  })
+
+  // ============ Role Resource CRUD ============
+
+  test('role index should list roles', async ({ client, assert }) => {
+    const response = await client.visit('admin_role.index').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: { data: any[]; meta: any } }
+    assert.isArray(body.data.data)
+    assert.isAtLeast(body.data.data.length, 1)
+  })
+
+  test('role store should create a new role', async ({ client, assert }) => {
+    const response = await client
+      .visit('admin_role.store')
+      .json({
+        name: 'TestRole',
+        code: 'test_role',
+        remark: 'test role',
+        status: 1,
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.name, 'TestRole')
+    assert.equal(body.data.code, 'test_role')
+  })
+
+  test('role show should return role detail', async ({ client, assert }) => {
+    const role = await models.AdminRole.create({
+      name: 'ShowRole',
+      code: 'show_role',
+      status: 1,
+    })
+
+    const response = await client.visit('admin_role.show', { id: role.id }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.name, 'ShowRole')
+  })
+
+  test('role update should modify role info', async ({ client, assert }) => {
+    const role = await models.AdminRole.create({
+      name: 'UpdateRole',
+      code: 'update_role',
+      status: 1,
+    })
+
+    const response = await client
+      .visit('admin_role.update', { id: role.id })
+      .json({
+        name: 'UpdatedRole',
+        code: 'updated_role',
+        status: 0,
+        remark: 'updated',
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    await role.refresh()
+    assert.equal(role.name, 'UpdatedRole')
+    assert.equal(role.status, 0)
+  })
+
+  test('role destroy should delete role', async ({ client, assert }) => {
+    const role = await models.AdminRole.create({
+      name: 'DeleteRole',
+      code: 'delete_role',
+      status: 1,
+    })
+    const roleId = role.id
+
+    const response = await client.visit('admin_role.destroy', { id: roleId }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const deleted = await models.AdminRole.find(roleId)
+    assert.isNull(deleted)
+  })
+
+  // ============ Menu Resource CRUD ============
+
+  test('menu index should list menus', async ({ client, assert }) => {
+    const response = await client.visit('admin_menu.index').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: { data: any[]; meta: any } }
+    assert.isArray(body.data.data)
+  })
+
+  test('menu store should create a new menu', async ({ client, assert }) => {
+    const response = await client
+      .visit('admin_menu.store')
+      .json({
+        title: 'TestMenu',
+        name: 'test_menu',
+        path: '/test',
+        icon: 'ri-test-line',
+        status: 1,
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.title, 'TestMenu')
+    assert.equal(body.data.name, 'test_menu')
+  })
+
+  test('menu show should return menu detail', async ({ client, assert }) => {
+    const menu = await models.AdminMenu.create({
+      title: 'ShowMenu',
+      name: 'show_menu',
+      status: 1,
+    })
+
+    const response = await client.visit('admin_menu.show', { id: menu.id }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.title, 'ShowMenu')
+  })
+
+  test('menu update should modify menu info', async ({ client, assert }) => {
+    const menu = await models.AdminMenu.create({
+      title: 'UpdateMenu',
+      name: 'update_menu',
+      status: 1,
+    })
+
+    const response = await client
+      .visit('admin_menu.update', { id: menu.id })
+      .json({
+        title: 'UpdatedMenu',
+        name: 'updated_menu',
+        status: 0,
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    await menu.refresh()
+    assert.equal(menu.title, 'UpdatedMenu')
+    assert.equal(menu.status, 0)
+  })
+
+  test('menu destroy should delete menu', async ({ client, assert }) => {
+    const menu = await models.AdminMenu.create({
+      title: 'DeleteMenu',
+      name: 'delete_menu',
+      status: 1,
+    })
+    const menuId = menu.id
+
+    const response = await client.visit('admin_menu.destroy', { id: menuId }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const deleted = await models.AdminMenu.find(menuId)
+    assert.isNull(deleted)
+  })
+
+  // ============ Dept Resource CRUD ============
+
+  test('dept index should list depts', async ({ client, assert }) => {
+    const response = await client.visit('admin_dept.index').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: { data: any[]; meta: any } }
+    assert.isArray(body.data.data)
+  })
+
+  test('dept store should create a new dept', async ({ client, assert }) => {
+    const response = await client
+      .visit('admin_dept.store')
+      .json({
+        name: 'TestDept',
+        leader: 'TestLeader',
+        phone: '13800138000',
+        email: 'dept@example.com',
+        status: 1,
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.name, 'TestDept')
+  })
+
+  test('dept show should return dept detail', async ({ client, assert }) => {
+    const dept = await models.AdminDept.create({
+      name: 'ShowDept',
+      phone: '13800138000',
+      status: 1,
+    })
+
+    const response = await client.visit('admin_dept.show', { id: dept.id }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.name, 'ShowDept')
+  })
+
+  test('dept update should modify dept info', async ({ client, assert }) => {
+    const dept = await models.AdminDept.create({
+      name: 'UpdateDept',
+      phone: '13800138000',
+      status: 1,
+    })
+
+    const response = await client
+      .visit('admin_dept.update', { id: dept.id })
+      .json({
+        name: 'UpdatedDept',
+        phone: '13900139000',
+        status: 0,
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    await dept.refresh()
+    assert.equal(dept.name, 'UpdatedDept')
+    assert.equal(dept.status, 0)
+  })
+
+  test('dept destroy should delete dept', async ({ client, assert }) => {
+    const dept = await models.AdminDept.create({
+      name: 'DeleteDept',
+      phone: '13800138000',
+      status: 1,
+    })
+    const deptId = dept.id
+
+    const response = await client.visit('admin_dept.destroy', { id: deptId }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const deleted = await models.AdminDept.find(deptId)
+    assert.isNull(deleted)
+  })
+
+  // ============ Log Resource (index/show/destroy) ============
+
+  test('log index should list logs', async ({ client, assert }) => {
+    const response = await client.visit('admin_log.index').send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: { data: any[]; meta: any } }
+    assert.isArray(body.data.data)
+  })
+
+  test('log show should return log detail', async ({ client, assert }) => {
+    const log = await models.AdminLog.create({
+      username: 'admin',
+      method: 'GET',
+      path: '/test',
+      ip: '127.0.0.1',
+      status: 200,
+    })
+
+    const response = await client.visit('admin_log.show', { id: log.id }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const body = response.body() as { data: Record<string, any> }
+    assert.equal(body.data.username, 'admin')
+  })
+
+  test('log destroy should delete log', async ({ client, assert }) => {
+    const log = await models.AdminLog.create({
+      username: 'admin',
+      method: 'GET',
+      path: '/test',
+      ip: '127.0.0.1',
+      status: 200,
+    })
+    const logId = log.id
+
+    const response = await client.visit('admin_log.destroy', { id: logId }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const deleted = await models.AdminLog.find(logId)
+    assert.isNull(deleted)
+  })
+
+  // ============ Auth: Destructive (put at the end) ============
+
+  test('forgot-password should reset password', async ({ client, assert }) => {
+    const secretRes = await client.visit('admin_totp').send()
+    const secretBody = secretRes.body() as { data: { secret: string } }
+    const secret = secretBody.data.secret
+    const bindCode = await totp.generate({ secret, digits: 6 })
+
+    await client
+      .visit('admin_update_mine')
+      .json({ phone: '13800138000', secret, code: bindCode })
+      .send()
+
+    const resetCode = await totp.generate({ secret, digits: 6 })
+    const response = await client
+      .visit('guest_reset')
+      .json({
+        username: 'admin',
+        newPassword: 'resetpass123',
+        phone: '13800138000',
+        code: resetCode,
+      })
+      .send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const loginRes = await client
+      .visit('guest_login')
+      .json({ username: 'admin', password: 'resetpass123' })
+      .send()
+    loginRes.assertStatus(200)
+    const loginBody = loginRes.body() as { code: number; data: { refreshToken: string } }
+    assert.equal(loginBody.code, 2)
+
+    const twoFactorCode = await totp.generate({ secret, digits: 6 })
+    const finalLoginRes = await client
+      .visit('guest_login')
+      .json({
+        username: 'admin',
+        password: 'resetpass123',
+        code: twoFactorCode,
+        token: loginBody.data.refreshToken,
+      })
+      .send()
+    finalLoginRes.assertStatus(200)
+    finalLoginRes.assertBodyContains({ code: 0, message: 'success' })
+  })
+
+  test('delete current token should invalidate it', async ({ client }) => {
+    const response = await client.visit('admin_session_delete', { id: 'current' }).send()
+
+    response.assertStatus(200)
+    response.assertBodyContains({ code: 0, message: 'success' })
+
+    const mineRes = await client.visit('admin_mine').send()
+    mineRes.assertStatus(401)
+  })
+})

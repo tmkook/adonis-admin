@@ -1,0 +1,58 @@
+{{{
+  exports({ to: app.httpControllersPath(`admin/admin_system_controller.ts`) })
+}}}
+import { Router } from '@adonisjs/core/http'
+import * as controllers from 'adonis-admin/src/admin_controller'
+import * as models from '#models/admin'
+
+class SystemController extends controllers.SystemController {
+  protected model = models.default
+  protected totpEnabled = true
+}
+
+class UserController extends controllers.UserController {
+  protected model = models.default
+}
+
+class RoleController extends controllers.RoleController {
+  protected model = models.AdminRole
+}
+
+class MenuController extends controllers.MenuController {
+  protected model = models.AdminMenu
+}
+
+class DeptController extends controllers.DeptController {
+  protected model = models.AdminDept
+}
+
+class LogController extends controllers.LogController {
+  protected model = models.AdminLog
+}
+
+export default function registerSystemControllers(router: Router) {
+  // Guest routes (no authentication required)
+  router.post('auth/tokens', [SystemController, 'login']).as('guest_login')
+  router.post('auth/tokens/refresh', [SystemController, 'refreshToken']).as('guest_refresh')
+  router.post('auth/passwords/reset', [SystemController, 'forgotPassword']).as('guest_reset')
+
+  // Auth routes (require authentication)
+  router.get('auth/routes', () => {code: 0, data: router.toJSON()}).as('admin_routes')
+  router.get('auth/totp', [SystemController, 'showTotpSecret']).as('admin_totp')
+  router.get('auth/mine', [SystemController, 'mine']).as('admin_mine')
+  router.patch('auth/mine', [SystemController, 'updateMine']).as('admin_update_mine')
+
+  // Token management
+  router.get('auth/sessions', [SystemController, 'accessTokens']).as('admin_sessions')
+  router.delete('auth/sessions/:id', [SystemController, 'outAccessToken']).as('admin_session_delete')
+
+  // File upload
+  router.post('uploads', [SystemController, 'upload']).as('admin_upload')
+
+  // Resource management
+  router.resource('users', UserController).apiOnly().as('admin_user')
+  router.resource('roles', RoleController).apiOnly().as('admin_role')
+  router.resource('menus', MenuController).apiOnly().as('admin_menu')
+  router.resource('depts', DeptController).apiOnly().as('admin_dept')
+  router.resource('logs', LogController).apiOnly().as('admin_log')
+}

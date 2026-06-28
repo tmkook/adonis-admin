@@ -1,0 +1,42 @@
+{{{
+    exports({ to: app.seedersPath('admin_seeder.ts') })
+}}}
+import { BaseSeeder } from '@adonisjs/lucid/seeders'
+import * as models from '#models/admin'
+
+export default class extends BaseSeeder {
+  async run() {
+    let dept = await models.AdminDept.query().where('name', 'Admin').first()
+    if (!dept) {
+      dept = new models.AdminDept()
+      dept.name = 'Global Headquarters'
+      dept.remark = 'Example Department'
+      await dept.save()
+    }
+
+    let user = await models.default.query().where('username', 'admin').first()
+    if (!user) {
+      user = new models.default()
+      user.username = 'admin'
+      user.nickname = 'Admin'
+      user.password = 'admin123'
+      user.deptId = dept.id
+      await user.save()
+    }
+
+    let role = await models.AdminRole.query().where('code', 'admin').first()
+    if (!role) {
+      role = new models.AdminRole()
+      role.code = 'admin'
+      role.name = 'Admin'
+      role.remark = 'Default super user role '
+      role.status = 1
+      await role.save()
+    }
+
+    await user.load('roles')
+    if (!user.roles.some((r) => r.id === role.id)) {
+      await user.related('roles').attach([role.id])
+    }
+  }
+}

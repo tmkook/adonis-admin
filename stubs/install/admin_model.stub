@@ -1,0 +1,195 @@
+{{{
+    exports({ to: app.modelsPath('admin.ts') })
+}}}
+import hash from '@adonisjs/core/services/hash'
+import { compose } from '@adonisjs/core/helpers'
+import { column } from '@adonisjs/lucid/orm'
+import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
+import { type AccessToken, DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
+import { manyToMany, belongsTo } from '@adonisjs/lucid/orm'
+import type { ManyToMany, BelongsTo } from '@adonisjs/lucid/types/relations'
+import * as schemas from '#database/schema'
+
+export default class AdminUser extends compose(
+  schemas.AdminUserSchema,
+  withAuthFinder(hash, { uids: ['username'] })
+) {
+  static table = 'admin_users'
+  static accessTokens = DbAccessTokensProvider.forModel(AdminUser, {
+    type: 'auth',
+    table: 'admin_auth_access_tokens',
+  })
+  declare currentAccessToken?: AccessToken
+
+  @column({ serializeAs: null })
+  declare secret: string
+
+  get totpStatus() {
+    return this.secret.length > 0
+  }
+
+  @manyToMany(() => AdminRole, {
+    pivotTable: 'admin_user_roles',
+    pivotForeignKey: 'user_id',
+    pivotRelatedForeignKey: 'role_id',
+  })
+  declare roles: ManyToMany<typeof AdminRole>
+
+  @belongsTo(() => AdminDept, {
+    foreignKey: 'deptId',
+  })
+  declare dept: BelongsTo<typeof AdminDept>
+
+  /**
+   * Get user menus
+   * @param user User
+   * @returns AdminMenu[]
+   * @example
+   * let menus = await this.getUserMenus(user)
+   */
+  static async getUserMenus(user: AdminUser): Promise<AdminMenu[]> {
+    let roles = await this.getUserRoles(user)
+    const seen = new Map<number, AdminMenu>()
+    for (const role of roles) {
+      for (const menu of role.menus) {
+        if (!seen.has(menu.id)) {
+          seen.set(menu.id, menu)
+        }
+      }
+    }
+
+    return Array.from(seen.values())
+  }
+
+  /**
+   * Get user roles
+   * @param user User
+   * @returns AdminRole[]
+   * @example
+   * let roles = await this.getUserRoles(user)
+   */
+  static async getUserRoles(user: AdminUser): Promise<AdminRole[]> {
+    if (!user.roles) {
+      await user.load('roles', (role) => role.preload('menus'))
+    }
+    return user.roles
+  }
+
+  /**
+   * Get user role codes
+   * @param user User
+   * @returns string[]
+   * @example
+   * let roleCodes = await this.getUserRoleCodes(user)
+   */
+  static async getUserRoleCodes(user: AdminUser): Promise<string[]> {
+    const roles = await this.getUserRoles(user)
+    return roles.map((role) => role.code)
+  }
+
+  /**
+   * Check if user has specific role
+   * @param user User
+   * @param role Role codes
+   * @returns boolean
+   * @example
+   * let isAdmin = await this.isRole(user, ['admin'])
+   */
+  static async isRole(user: AdminUser, roleCode: string[]) {
+    const roles = await this.getUserRoles(user)
+    return roles.some((r) => roleCode.includes(r.code))
+  }
+
+  /**
+   * Check if user is admin
+   * @param user User
+   * @returns boolean
+   * @example
+   * let isAdmin = await this.isAdmin(user)
+   */
+  static async isAdmin(user: AdminUser) {
+    if (user.id === 1) {
+      return true
+    }
+    return await this.isRole(user, ['admin'])
+  }
+
+  /**
+   * Check if user can access route
+   * @param user User
+   * @param routeName Permission
+   * @returns boolean
+   * @example
+   * let access = await this.canAccess(user, 'index')
+   */
+  static async canAccess(user: AdminUser, routeName: string) {
+    // Has all permissions configured
+    if (user.permissions === '*:*:*') {
+      return true
+    }
+
+    // User has permission
+    const permissions = user.permissions.split(',')
+    for (let name of permissions) {
+      if (routeName.startsWith(name)) {
+        return true
+      }
+    }
+
+    // Admin does not require permission check
+    const isAdmin = await AdminUser.isAdmin(user)
+    if (isAdmin) {
+      return true
+    }
+
+    // User has menu permission
+    const menus = await AdminUser.getUserMenus(user)
+    for (let menu of menus) {
+      let permissions = menu.permissions.split(',')
+      for (let item of permissions) {
+        if (routeName.startsWith(item)) {
+          return true
+        }
+      }
+    }
+
+    return false
+  }
+}
+
+export class AdminRole extends schemas.AdminRoleSchema {
+  static table = 'admin_roles'
+
+  @manyToMany(() => AdminUser, {
+    pivotTable: 'admin_user_roles',
+    pivotForeignKey: 'role_id',
+    pivotRelatedForeignKey: 'user_id',
+  })
+  declare users: ManyToMany<typeof AdminUser>
+
+  @manyToMany(() => AdminMenu, {
+    pivotTable: 'admin_role_menus',
+    pivotForeignKey: 'role_id',
+    pivotRelatedForeignKey: 'menu_id',
+  })
+  declare menus: ManyToMany<typeof AdminMenu>
+}
+
+export class AdminMenu extends schemas.AdminMenuSchema {
+  static table = 'admin_menus'
+
+  @manyToMany(() => AdminRole, {
+    pivotTable: 'admin_role_menus',
+    pivotForeignKey: 'menu_id',
+    pivotRelatedForeignKey: 'role_id',
+  })
+  declare roles: ManyToMany<typeof AdminRole>
+}
+
+export class AdminDept extends schemas.AdminDeptSchema {
+  static table = 'admin_depts'
+}
+
+export class AdminLog extends schemas.AdminLogSchema {
+  static table = 'admin_logs'
+}

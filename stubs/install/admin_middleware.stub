@@ -1,0 +1,53 @@
+{{{
+    exports({ to: app.middlewarePath('admin_middleware.ts') })
+}}}
+import type { HttpContext } from '@adonisjs/core/http'
+import type { NextFn } from '@adonisjs/core/types/http'
+import type { Authenticators } from '@adonisjs/auth/types'
+import * as models from '#models/admin'
+
+export default class AdminMiddleware {
+  async handle(
+    ctx: HttpContext,
+    next: NextFn,
+    options: {
+      logs?: boolean
+      guards?: (keyof Authenticators)[]
+    } = {}
+  ) {
+    // Log request
+    if (options.logs) {
+      ctx.response.onFinish(async () => {
+        const log = new models.AdminLog()
+        log.ip = ctx.request.ip()
+        log.path = ctx.request.url()
+        log.method = ctx.request.method()
+        log.params = JSON.stringify(ctx.request.qs())
+        log.headers = JSON.stringify(ctx.request.headers())
+        log.status = ctx.response.getStatus()
+        if (ctx.auth.user) {
+          const user = ctx.auth.user as any
+          if (user.username) {
+            log.username = user.username
+          }
+        }
+        await log.save()
+      })
+    }
+
+    // No route name set or route name starts with guest_, skip authentication
+    const routeName = ctx.route?.name || ''
+    if (routeName === '' || routeName.startsWith('guest_')) {
+      return next()
+    }
+
+    // Verify user permissions
+    await ctx.auth.authenticateUsing(options.guards)
+    const canAccess = await models.default.canAccess(ctx.auth.user as models.default, routeName)
+    if (canAccess) {
+      return next()
+    }
+
+    ctx.response.abort('permission denied', 403)
+  }
+}

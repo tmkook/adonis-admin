@@ -1,0 +1,16 @@
+{{{
+    exports({ to: app.startPath('admin.ts') })
+}}}
+import router from '@adonisjs/core/services/router'
+import registerSystemControllers from '#controllers/admin/admin_system_controller'
+
+const middleware = router.named({
+  admin: () => import('#middleware/admin_middleware'),
+})
+
+router
+  .group(() => {
+    registerSystemControllers(router)
+  })
+  .prefix('admin/api')
+  .use(middleware.admin({ guards: ['api'], logs: true }))
