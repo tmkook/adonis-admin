@@ -30,14 +30,11 @@ export default class InstallCommand extends BaseCommand {
     codemods.overwriteExisting = true
     await codemods.makeUsingStub(stubsRoot, '/install/auth_config.stub', { name: 'admin' })
 
-    // append admin routes
-    this.appendFileLine(this.app.startPath('routes.ts'), "await import('#start/admin')")
-    this.logger.action(`change start/routes.ts`).succeeded()
-
-    // run migrations
     if (!this.app.inTest) {
       await this.kernel.exec('migration:run', [])
       await this.kernel.exec('db:seed', [])
+      this.appendFileLine(this.app.startPath('routes.ts'), "await import('#start/admin')")
+      this.logger.action(`change start/routes.ts`).succeeded()
     }
   }
 

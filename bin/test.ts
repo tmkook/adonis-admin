@@ -1,3 +1,5 @@
+process.env.NODE_ENV = 'test'
+
 import { assert } from '@japa/assert'
 import { configure, processCLIArgs, run } from '@japa/runner'
 

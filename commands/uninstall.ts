@@ -11,25 +11,26 @@ export default class InstallCommand extends BaseCommand {
   }
 
   async run() {
-    if (this.app.inDev) {
-      const codemods = await this.createCodemods()
+    const codemods = await this.createCodemods()
 
-      // init files
-      this.logger.action(this.delFile(this.app.middlewarePath('admin_middleware.ts'))).succeeded()
-      this.logger.action(this.delFile(this.app.modelsPath('admin.ts'))).succeeded()
-      this.logger.action(this.delFile(this.app.seedersPath('admin_seeder.ts'))).succeeded()
-      this.logger.action(this.delFile(this.app.makePath('tests/admin_tests'))).succeeded()
-      this.logger
-        .action(this.delFile(this.app.migrationsPath('1744446870487_create_admin_table.ts')))
-        .succeeded()
+    // init files
+    this.logger.action(this.delFile(this.app.middlewarePath('admin_middleware.ts'))).succeeded()
+    this.logger.action(this.delFile(this.app.modelsPath('admin.ts'))).succeeded()
+    this.logger.action(this.delFile(this.app.seedersPath('admin_seeder.ts'))).succeeded()
+    this.logger
+      .action(this.delFile(this.app.makePath('tests/functional/admin_api.spec.ts')))
+      .succeeded()
+    this.logger
+      .action(this.delFile(this.app.migrationsPath('1744446870487_create_admin_table.ts')))
+      .succeeded()
 
-      // remove admin routes
+    // overwrite auth config file
+    codemods.overwriteExisting = true
+    await codemods.makeUsingStub(stubsRoot, '/install/auth_config.stub', { name: 'user' })
+
+    if (!this.app.inTest) {
       this.removeFileLine(this.app.startPath('routes.ts'), "await import('#start/admin')")
       this.logger.action(`change start/routes.ts`).succeeded()
-
-      // overwrite auth config file
-      codemods.overwriteExisting = true
-      await codemods.makeUsingStub(stubsRoot, '/install/auth_config.stub', { name: 'user' })
     }
   }
 

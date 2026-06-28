@@ -3,10 +3,21 @@ import Configure from '@adonisjs/core/commands/configure'
 import InstallCommand from '../commands/install.ts'
 import ResourceCommand from '../commands/resource.ts'
 import UninstallCommand from '../commands/uninstall.ts'
-import { createApp } from './utils.ts'
+import { createApp, BASE_URL } from './utils.ts'
+import fs from 'node:fs'
 
 test.group('Commands', async (group) => {
   group.each.disableTimeout()
+
+  // Clean up tmp dir before tests to avoid leftover files from previous runs
+  group.setup(async () => {
+    fs.rmSync(BASE_URL, { recursive: true, force: true })
+  })
+
+  // Clean up tmp dir after all tests
+  group.teardown(async () => {
+    fs.rmSync(BASE_URL, { recursive: true, force: true })
+  })
 
   test('Configure', async ({}) => {
     const app = await createApp()

@@ -18,27 +18,25 @@ export default class MakeCommand extends BaseCommand {
   declare force: boolean
 
   async run() {
-    if (this.app.inDev) {
-      const codemods = await this.createCodemods()
-      codemods.overwriteExisting = this.force
+    const codemods = await this.createCodemods()
+    codemods.overwriteExisting = this.force
 
-      const className = string.pascalCase(this.name)
-      const fileName = string.snakeCase(this.name)
-      await codemods.makeUsingStub(stubsRoot, '/make/resource_controller.stub', {
-        className,
-        fileName,
-      })
+    const className = string.pascalCase(this.name)
+    const fileName = string.snakeCase(this.name)
+    await codemods.makeUsingStub(stubsRoot, '/make/resource_controller.stub', {
+      className,
+      fileName,
+    })
 
-      // append resource controller to routes.ts
-      const filePath = this.app.startPath('admin.ts')
-      const byline = 'registerSystemControllers('
-      const content = `    router.resource('${fileName}', '#controllers/admin/${fileName}_controller').apiOnly().as('${fileName}')`
-      const added = this.appendFileByString(filePath, content, byline)
-      if (!added) {
-        this.logger.action('change start/admin.ts').succeeded()
-      } else {
-        this.logger.action('change start/admin.ts').skipped()
-      }
+    // append resource controller to routes.ts
+    const filePath = this.app.startPath('admin.ts')
+    const byline = 'registerSystemControllers('
+    const content = `    router.resource('${fileName}', '#controllers/admin/${fileName}_controller').apiOnly().as('${fileName}')`
+    const added = this.appendFileByString(filePath, content, byline)
+    if (!added) {
+      this.logger.action('change start/admin.ts').succeeded()
+    } else {
+      this.logger.action('change start/admin.ts').skipped()
     }
   }
 
