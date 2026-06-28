@@ -296,7 +296,7 @@ export abstract class UserController {
    * Show individual record
    */
   async show(ctx: any) {
-    const result = await resource.detail(this.model, ctx.request.param('id'))
+    const result = await resource.detail(this.model.query(), ctx.request.param('id'))
     return resource.success(result)
   }
 
@@ -382,7 +382,7 @@ export abstract class RoleController {
    * Show individual record
    */
   async show(ctx: any) {
-    const result = await resource.detail(this.model, ctx.request.param('id'))
+    const result = await resource.detail(this.model.query(), ctx.request.param('id'))
     return resource.success(result)
   }
 
@@ -545,7 +545,7 @@ export abstract class DeptController {
    * Show individual record
    */
   async show(ctx: any) {
-    const result = await resource.detail(this.model, ctx.request.param('id'))
+    const result = await resource.detail(this.model.query(), ctx.request.param('id'))
     return resource.success(result)
   }
 
@@ -625,7 +625,7 @@ export abstract class LogController {
    * Show individual record
    */
   async show(ctx: any) {
-    const result = await resource.detail(this.model, ctx.request.param('id'))
+    const result = await resource.detail(this.model.query(), ctx.request.param('id'))
     return resource.success(result)
   }
 
