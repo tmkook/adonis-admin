@@ -29,7 +29,14 @@ export abstract class SystemController {
    */
   async mine(ctx: any) {
     const user = ctx.auth.getUserOrFail()
-    return resource.success(user)
+    const roles = await this.model.getUserRoleCodes(user)
+    return resource.success({ user, roles })
+  }
+
+  async menus(ctx: any) {
+    const user = ctx.auth.getUserOrFail()
+    const menus = await this.model.getUserMenus(user)
+    return resource.success({ menus })
   }
 
   /**
@@ -72,13 +79,14 @@ export abstract class SystemController {
     }
 
     // Create accessToken
+    const expiresIn = params.remember? '7d' : '1d'
     const tokenName = utils.makeTokenName(ctx.request)
     const accessToken = await this.model.accessTokens.create(user, ['*'], {
-      expiresIn: '1d',
+      expiresIn: expiresIn,
       name: tokenName,
     })
 
-    const tokenData = { accessTokenId: String(accessToken.identifier), userId: String(user.id) }
+    const tokenData = { accessTokenId: String(accessToken.identifier), userId: String(user.id), expiresIn: expiresIn }
     const refreshToken = utils.makeRefreshToken(tokenData)
 
     const tokens = {
@@ -87,8 +95,7 @@ export abstract class SystemController {
       expires: accessToken.expiresAt!.getTime(),
     }
 
-    const roles = await this.model.getUserRoleCodes(user)
-    return resource.success({ user, roles, tokens })
+    return resource.success({ user, tokens })
   }
 
   /**
@@ -112,12 +119,12 @@ export abstract class SystemController {
     await this.model.accessTokens.delete(user, tokens.accessTokenId)
     const tokenName = utils.makeTokenName(ctx.request)
     const accessToken = await this.model.accessTokens.create(user, ['*'], {
-      expiresIn: '1d',
+      expiresIn: tokens.expiresIn,
       name: tokenName,
     })
 
-    const tokenData = { accessTokenId: String(accessToken.identifier), userId: String(user.id) }
-    const refreshToken = utils.makeRefreshToken(tokenData)
+    tokens.accessTokenId = accessToken.identifier
+    const refreshToken = utils.makeRefreshToken(tokens)
 
     return resource.success({
       refreshToken: refreshToken,

@@ -39,6 +39,7 @@ export default function registerSystemControllers(router: Router) {
   // Auth routes (require authentication)
   router.get('auth/totp', [SystemController, 'showTotpSecret']).as('admin_totp')
   router.get('auth/mine', [SystemController, 'mine']).as('admin_mine')
+  router.get('auth/menus', [SystemController, 'menus']).as('admin_menus')
   router.patch('auth/mine', [SystemController, 'updateMine']).as('admin_update_mine')
 
   // Token management

@@ -77,16 +77,16 @@ export function makeTokenName(request: any): string {
   return `${device}(${ip})`
 }
 
-export function makeRefreshToken(data: { accessTokenId: string; userId: string }): string {
-  return encryption.encrypt(data, { expiresIn: '30d' })
+export function makeRefreshToken(data: { accessTokenId: string; userId: string, expiresIn: string }): string {
+  return encryption.encrypt(data, { expiresIn: data.expiresIn })
 }
 
-export function verifyRefreshToken(token: string): { accessTokenId: string; userId: string } {
-  return encryption.decrypt(token) as { accessTokenId: string; userId: string }
+export function verifyRefreshToken(token: string): { accessTokenId: string; userId: string, expiresIn: string, expiresInTime: number } {
+  return encryption.decrypt(token) as { accessTokenId: string; userId: string, expiresIn: string, expiresInTime: number }
 }
 
 export function makeAuthToken(data: { userId: string }): string {
-  return encryption.encrypt(data, { expiresIn: '30d' })
+  return encryption.encrypt(data, { expiresIn: '1d' })
 }
 
 export function verifyAuthToken(token: string): { userId: string } {
