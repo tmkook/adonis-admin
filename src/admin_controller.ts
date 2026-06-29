@@ -79,14 +79,18 @@ export abstract class SystemController {
     }
 
     // Create accessToken
-    const expiresIn = params.remember? '7d' : '1d'
+    const expiresIn = params.remember ? '7d' : '1d'
     const tokenName = utils.makeTokenName(ctx.request)
     const accessToken = await this.model.accessTokens.create(user, ['*'], {
       expiresIn: expiresIn,
       name: tokenName,
     })
 
-    const tokenData = { accessTokenId: String(accessToken.identifier), userId: String(user.id), expiresIn: expiresIn }
+    const tokenData = {
+      accessTokenId: String(accessToken.identifier),
+      userId: String(user.id),
+      expiresIn: expiresIn,
+    }
     const refreshToken = utils.makeRefreshToken(tokenData)
 
     const tokens = {
@@ -109,28 +113,29 @@ export abstract class SystemController {
     )
 
     const params = await ctx.request.validateUsing(tokenValidator)
-    const tokens = utils.verifyRefreshToken(params.refreshToken)
-    const user = await this.model.findOrFail(tokens.userId)
+    const refreshs = utils.verifyRefreshToken(params.refreshToken)
+    const user = await this.model.findOrFail(refreshs.userId)
     if (user.status !== 1) {
       return resource.error('user disabled', 'E_USER_DISABLED')
     }
 
     // refresh accessToken
-    await this.model.accessTokens.delete(user, tokens.accessTokenId)
+    await this.model.accessTokens.delete(user, refreshs.accessTokenId)
     const tokenName = utils.makeTokenName(ctx.request)
     const accessToken = await this.model.accessTokens.create(user, ['*'], {
-      expiresIn: tokens.expiresIn,
+      expiresIn: refreshs.expiresIn,
       name: tokenName,
     })
 
-    tokens.accessTokenId = accessToken.identifier
-    const refreshToken = utils.makeRefreshToken(tokens)
+    refreshs.accessTokenId = accessToken.identifier
+    const refreshToken = utils.makeRefreshToken(refreshs)
 
-    return resource.success({
+    const tokens = {
       refreshToken: refreshToken,
       accessToken: accessToken.value!.release(),
       expires: accessToken.expiresAt!.getTime(),
-    })
+    }
+    return resource.success({ tokens })
   }
 
   /**
