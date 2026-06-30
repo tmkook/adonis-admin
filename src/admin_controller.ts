@@ -252,12 +252,12 @@ export abstract class SystemController {
     // update profile
     const updateProfileValidator = vine.create(
       vine.object({
-        phone: phoneValidator,
         avatar: vine.string().url().optional(),
-        nickname: vine.string().trim().minLength(1).maxLength(30).optional(),
-        sex: vine.number().in([0, 1, 2]).optional(),
+        phone: phoneValidator.optional(),
         email: vine.string().email().optional(),
+        sex: vine.number().in([0, 1, 2]).optional(),
         remark: vine.string().trim().maxLength(56).optional(),
+        nickname: vine.string().trim().minLength(1).maxLength(30).optional(),
       })
     )
     const profile = await ctx.request.validateUsing(updateProfileValidator)
