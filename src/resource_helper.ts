@@ -168,7 +168,7 @@ export class ResourceHelper {
     return await model.transaction(async (trx) => {
       let item = await model.create(data, { client: trx })
       if (fn) {
-        await fn({ client: trx })
+        await fn({ client: trx, result: item })
       }
       return item
     })
@@ -188,11 +188,11 @@ export class ResourceHelper {
   async update(model: LucidModel, data: Record<string, any>, id: number | string, fn?: Function) {
     let ids = String(id).split(',')
     return await model.transaction(async (trx) => {
-      await model.query({ client: trx }).whereIn(this.pk, ids).update(data)
+      const items = await model.query({ client: trx }).whereIn(this.pk, ids).update(data)
       if (fn) {
-        await fn({ client: trx })
+        await fn({ client: trx, result: items })
       }
-      return ids
+      return items
     })
   }
 
@@ -213,5 +213,14 @@ export class ResourceHelper {
       }
       return ids
     })
+  }
+
+  async relation(item: any, relations?: Record<string, any>) {
+    if (relations) {
+      for (let key in relations) {
+        let ids = String(relations[key]).split(',')
+        await item.related(key).sync(ids)
+      }
+    }
   }
 }

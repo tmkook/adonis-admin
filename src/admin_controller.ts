@@ -299,7 +299,11 @@ export abstract class UserController {
       remark: resource.symbols.like,
       status: resource.symbols.eq,
     }
-    const query = resource.query(this.model.query(), ctx.request.qs(), filters)
+    const query = resource.query(
+      this.model.query().preload('roles').preload('dept'),
+      ctx.request.qs(),
+      filters
+    )
     const result = await resource.paginate(query, ctx.request.qs(), true)
     return resource.success(result)
   }
@@ -308,7 +312,10 @@ export abstract class UserController {
    * Show individual record
    */
   async show(ctx: any) {
-    const result = await resource.detail(this.model.query(), ctx.request.param('id'))
+    const result = await resource.detail(
+      this.model.query().preload('roles').preload('dept'),
+      ctx.request.param('id')
+    )
     return resource.success(result)
   }
 
@@ -333,7 +340,12 @@ export abstract class UserController {
         })
       )
     )
-    const result = await resource.create(this.model, data)
+    const roles = ctx.request.input('roleIds', '')
+    const result = await resource.create(this.model, data, async (query: any) => {
+      if (roles) {
+        await resource.relation(query.result, { roles: roles.split(',') })
+      }
+    })
     return resource.success(result)
   }
 
@@ -358,7 +370,19 @@ export abstract class UserController {
         })
       )
     )
-    const result = await resource.update(this.model, data, ctx.request.param('id'))
+    const roles = ctx.request.input('roleIds', '')
+    const result = await resource.update(
+      this.model,
+      data,
+      ctx.request.param('id'),
+      async (query: any) => {
+        if (roles) {
+          for (let i in query.result) {
+            await resource.relation(query.result[i], { roles: roles.split(',') })
+          }
+        }
+      }
+    )
     return resource.success(result)
   }
 
@@ -385,7 +409,7 @@ export abstract class RoleController {
       remark: resource.symbols.like,
       status: resource.symbols.eq,
     }
-    const query = resource.query(this.model.query(), ctx.request.qs(), filters)
+    const query = resource.query(this.model.query().preload('menus'), ctx.request.qs(), filters)
     const result = await resource.paginate(query, ctx.request.qs(), true)
     return resource.success(result)
   }
@@ -394,7 +418,10 @@ export abstract class RoleController {
    * Show individual record
    */
   async show(ctx: any) {
-    const result = await resource.detail(this.model.query(), ctx.request.param('id'))
+    const result = await resource.detail(
+      this.model.query().preload('menus'),
+      ctx.request.param('id')
+    )
     return resource.success(result)
   }
 
@@ -412,7 +439,12 @@ export abstract class RoleController {
         })
       )
     )
-    const result = await resource.create(this.model, data)
+    const menus = ctx.request.input('menuIds', '')
+    const result = await resource.create(this.model, data, async (query: any) => {
+      if (menus) {
+        await resource.relation(query.result, { menus: menus.split(',') })
+      }
+    })
     return resource.success(result)
   }
 
@@ -430,7 +462,19 @@ export abstract class RoleController {
         })
       )
     )
-    const result = await resource.update(this.model, data, ctx.request.param('id'))
+    const menus = ctx.request.input('menuIds', '')
+    const result = await resource.update(
+      this.model,
+      data,
+      ctx.request.param('id'),
+      async (query: any) => {
+        if (menus) {
+          for (let i in query.result) {
+            await resource.relation(query.result[i], { menus: menus.split(',') })
+          }
+        }
+      }
+    )
     return resource.success(result)
   }
 
@@ -457,7 +501,7 @@ export abstract class MenuController {
       permissions: resource.symbols.like,
       status: resource.symbols.eq,
     }
-    const query = resource.query(this.model.query(), ctx.request.qs(), filters)
+    const query = resource.query(this.model.query().preload('roles'), ctx.request.qs(), filters)
     const result = await resource.paginate(query, ctx.request.qs(), true)
     return resource.success(result)
   }
@@ -495,7 +539,12 @@ export abstract class MenuController {
         })
       )
     )
-    const result = await resource.create(this.model, data)
+    const roles = ctx.request.input('roleIds', '')
+    const result = await resource.create(this.model, data, async (query: any) => {
+      if (roles) {
+        await resource.relation(query.result, { roles: roles.split(',') })
+      }
+    })
     return resource.success(result)
   }
 
@@ -521,7 +570,19 @@ export abstract class MenuController {
         })
       )
     )
-    const result = await resource.update(this.model, data, ctx.request.param('id'))
+    const roles = ctx.request.input('roleIds', '')
+    const result = await resource.update(
+      this.model,
+      data,
+      ctx.request.param('id'),
+      async (query: any) => {
+        if (roles) {
+          for (let i in query.result) {
+            await resource.relation(query.result[i], { roles: roles.split(',') })
+          }
+        }
+      }
+    )
     return resource.success(result)
   }
 
