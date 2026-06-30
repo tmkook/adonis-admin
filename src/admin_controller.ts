@@ -238,11 +238,11 @@ export abstract class SystemController {
       const updateTotpValidator = vine.create(
         vine.object({
           secret: vine.string().minLength(8),
-          code: vine.string().minLength(4).maxLength(8),
+          code: vine.number(),
         })
       )
       const data = await ctx.request.validateUsing(updateTotpValidator)
-      const isValid = await utils.totp.verify(data.code, { secret: data.secret, digits: 6 })
+      const isValid = await utils.totp.verify(String(data.code), { secret: data.secret, digits: 6 })
       if (!isValid) {
         return resource.error('totp code invalid', 'E_TOTP_ERROR')
       }

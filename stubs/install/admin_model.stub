@@ -3,7 +3,7 @@
 }}}
 import hash from '@adonisjs/core/services/hash'
 import { compose } from '@adonisjs/core/helpers'
-import { column } from '@adonisjs/lucid/orm'
+import { column, computed } from '@adonisjs/lucid/orm'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import { type AccessToken, DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
 import { manyToMany, belongsTo } from '@adonisjs/lucid/orm'
@@ -24,6 +24,7 @@ export default class AdminUser extends compose(
   @column({ serializeAs: null })
   declare secret: string
 
+  @computed()
   get totpStatus() {
     return this.secret.length > 0
   }
